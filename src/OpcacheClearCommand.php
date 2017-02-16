@@ -2,9 +2,9 @@
 
 namespace MicheleCurletta\LaravelOpcacheClear;
 
-use Illuminate\Console\Command;
 use GuzzleHttp\Client;
-use Crypt;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Crypt;
 
 class OpcacheClearCommand extends Command
 {
@@ -35,26 +35,29 @@ class OpcacheClearCommand extends Command
     /**
      * Execute the console command.
      *
-     * @return mixed
+     * @return void
      */
     public function handle()
     {
-        $client = new Client;
-        $request = $client->createRequest('GET', config('app.url', 'http://localhost'));
-        $request->setPath('/opcache-clear');
+        $client = new Client([
+            'base_uri' => config('app.url', 'http://localhost')
+        ]);
 
-        $originalToken = config('app.key');
+        $encryptedToken = Crypt::encrypt(config('app.key'));
 
-        $encryptedToken = Crypt::encrypt($originalToken);
+        $response = $client->request('GET', '/opcache-clear', [
+            'query' => [
+                'token' => $encryptedToken
+            ]
+        ]);
 
-        $request->getQuery()->set('token', $encryptedToken);
+        $body = json_decode($response->getBody());
 
-        $response = $client->send($request);
-
-        if(($response->json()['result']))
-            $this->line('So far, so good.');
-        else
-            $this->line('Ooops!');
+        if ($body->result) {
+            $this->info('PHP OPCache cleared successfully');
+        } else {
+            $this->error('Failed to clear PHP OPCache');
+        }
 
     }
 }
